@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>禁忌与戒律</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; min-height: 100%; overflow-y: auto; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: env(safe-area-inset-top) 12px 80px 12px; /* 底部留出空间给输入框 */
+  user-select: none;
+  touch-action: manipulation;
+}
+h1 { font-size: 20px; margin: 10px 0 15px; }
+
+/* 顶部 Tab 切换 */
+.nav-tabs {
+  display: flex;
+  width: min(92vw, 420px);
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 15px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-btn.active {
+  background: #334155;
+  color: #38bdf8;
+}
+
+/* 列表容器 */
+.list-container {
+  width: min(92vw, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  color: #475569;
+  font-size: 14px;
+  padding: 40px 20px;
+  background: #1e293b;
+  border-radius: 12px;
+}
+
+/* 条目卡片 */
+.item-card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+  line-height: 1.5;
+  border-left: 4px solid #334155;
+  animation: fadeIn 0.2s ease-out;
+}
+.item-card.taboo { border-left-color: #ef4444; } /* 禁忌用红色 */
+.item-card.commandment { border-left-color: #38bdf8; } /* 戒律用蓝色 */
+.item-content { flex: 1; padding-right: 10px; word-break: break-all; white-space: pre-wrap; }
+.delete-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+.delete-btn:active { color: #fca5a5; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 底部输入栏 */
+.add-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  border-top: 1px solid #1e293b;
+  z-index: 100;
+}
+.add-bar-inner {
+  display: flex;
+  width: min(92vw, 420px);
+  gap: 8px;
+}
+input[type="text"] {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 15px;
+  outline: none;
+}
+input[type="text"]::placeholder { color: #64748b; }
+.add-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #38bdf8;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.add-btn:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+<h1>禁忌与戒律</h1>
+
+<!-- 顶部标签页 -->
+<div class="nav-tabs">
+  <button id="tabTaboo" class="tab-btn active">🚫 禁忌</button>
+  <button id="tabCommandment" class="tab-btn">📜 戒律</button>
+</div>
+
+<!-- 列表容器 -->
+<div id="listContainer" class="list-container"></div>
+
+<!-- 底部输入栏 -->
+<div class="add-bar">
+  <div class="add-bar-inner">
+    <input type="text" id="inputField" placeholder="输入内容..." maxlength="100">
+    <button id="addBtn" class="add-btn">添加</button>
+  </div>
+</div>
+
+<script>
+// --- 状态管理 ---
+const state = {
+  currentTab: 'taboo', // 'taboo' 或 'commandment'
+  data: {
+    taboo: [],
+    commandment: []
+  }
+};
+
+// DOM 元素
+const tabTaboo = document.getElementById('tabTaboo');
+const tabCommandment = document.getElementById('tabCommandment');
+const listContainer = document.getElementById('listContainer');
+const inputField = document.getElementById('inputField');
+const addBtn = document.getElementById('addBtn');
+
+// --- 数据持久化 ---
+function loadData() {
+  const saved = localStorage.getItem('discipline_app_data');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.taboo) state.data.taboo = parsed.taboo;
+      if (parsed.commandment) state.data.commandment = parsed.commandment;
+    } catch (e) {
+      console.error('数据解析失败', e);
+    }
+  }
+  render();
+}
+
+function saveData() {
+  localStorage.setItem('discipline_app_data', JSON.stringify(state.data));
+}
+
+// --- 渲染逻辑 ---
+function render() {
+  const items = state.data[state.currentTab];
+  
+  if (items.length === 0) {
+    listContainer.innerHTML = `<div class="empty-state">暂无${state.currentTab === 'taboo' ? '禁忌' : '戒律'}，在下方输入框添加一条吧</div>`;
+    return;
+  }
+
+  let html = '';
+  // 最新的排在最上面
+  [...items].reverse().forEach(item => {
+    html += `
+      <div class="item-card ${state.currentTab}">
+        <div class="item-content">${escapeHTML(item.text)}</div>
+        <button class="delete-btn" data-id="${item.id}">×</button>
+      </div>
+    `;
+  });
+  listContainer.innerHTML = html;
+
+  // 绑定删除事件
+  listContainer.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.target.dataset.id;
+      deleteItem(id);
+    });
+  });
+}
+
+// 防止 XSS 注入
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}
+
+// --- 增删操作 ---
+function addItem() {
+  const text = inputField.value.trim();
+  if (!text) return;
+
+  const newItem = {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+    text: text,
+    date: Date.now()
+  };
+
+  state.data[state.currentTab].push(newItem);
+  saveData();
+  inputField.value = '';
+  render();
+  
+  // 滚动到底部（因为最新添加的在最上面，所以是滚动到顶部）
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteItem(id) {
+  if (!confirm('确定要删除这条记录吗？')) return;
+  
+  state.data[state.currentTab] = state.data[state.currentTab].filter(item => item.id !== id);
+  saveData();
+  render();
+}
+
+// --- 事件绑定 ---
+tabTaboo.addEventListener('click', () => {
+  state.currentTab = 'taboo';
+  tabTaboo.classList.add('active');
+  tabCommandment.classList.remove('active');
+  render();
+});
+
+tabCommandment.addEventListener('click', () => {
+  state.currentTab = 'commandment';
+  tabCommandment.classList.add('active');
+  tabTaboo.classList.remove('active');
+  render();
+});
+
+addBtn.addEventListener('click', addItem);
+
+inputField.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    addItem();
+  }
+});
+
+// 初始化
+loadData();
+
+// 注册 Service Worker（PWA 离线缓存）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW 注册成功', reg))
+      .catch(err => console.log('SW 注册失败', err));
+  });
+}
+</script>
+</body>
+</html>
